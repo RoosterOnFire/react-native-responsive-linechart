@@ -53,7 +53,6 @@ export type ChartContext = {
   viewportDomain: ChartDomain
   viewportOrigin: XYValue
   viewport: ViewPort
-  lastTouch: TouchEvent | undefined
 }
 
 export type TouchEvent =

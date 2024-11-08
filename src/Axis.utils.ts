@@ -1,9 +1,5 @@
 import { AxisDomain } from './types'
 
-export const filterValuesForDomain = (values: number[], domain: AxisDomain) => {
-  return values.filter(v => v >= domain.min && v <= domain.max)
-}
-
 export const calculateTickValues = (
   tickValues: number[] | undefined,
   tickCount: number | undefined,
@@ -23,7 +19,15 @@ export const calculateTickValues = (
   }
 
   if (ticks) {
-    return filterValuesForDomain(ticks, domain)
+    const valuesForDomain = new Array(ticks.length)
+    let count = 0
+    for (let i = 0; i < ticks.length; i++) {
+      const value = ticks[i]
+      if (value >= domain.min && value <= domain.max) {
+        valuesForDomain[count++] = value
+      }
+    }
+    return valuesForDomain.slice(0, count)
   }
 
   return []
