@@ -1,11 +1,11 @@
 import deepmerge from 'deepmerge'
 import * as React from 'react'
-import { G, Path, Rect } from 'react-native-svg'
+import { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 
 import ChartContext, { useChartContextLastTouch } from './ChartContext'
 import { adjustPointsForThickStroke, calculateTooltipIndex } from './Line.utils'
-import { ChartDataPoint, Shape, Smoothing, Stroke } from './types'
-import { scalePointsToDimensions, svgPath } from './utils'
+import { ChartDataPoint, ChartDomain, Dimensions, Gradient, Shape, Smoothing, Stroke } from './types'
+import { appendPointsToPath, scalePointsToDimensions, svgPath } from './utils'
 
 type Props = {
   /** Theme for the line */
@@ -15,6 +15,7 @@ type Props = {
       default?: Shape
       selected?: Shape
     }
+    gradient?: Gradient
   }
   smoothing?: Smoothing
   /** Only works in combination with smoothing='bezier'. Value between 0 and 1. */
@@ -33,27 +34,25 @@ type Props = {
   initialTooltipIndex?: number
   /** Data for the chart. Overrides optional data provided in `<Chart />`. */
   data?: ChartDataPoint[]
+  dimensions?: Dimensions
+  viewportDomain?: ChartDomain
+  scaledPoints?: { x: number; y: number }[]
 }
 
 export type LineHandle = {
   setTooltipIndex: (index: number | undefined) => void
 }
 
-const Line = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
+const LineArea = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
   const { data: contextData, dimensions, viewportDomain, viewportOrigin } = React.useContext(ChartContext)
-  const lastTouch = useChartContextLastTouch()
-  const [tooltipIndex, setTooltipIndex] = React.useState<number | undefined>(props.initialTooltipIndex)
+  const [randomGradientRef] = React.useState(Math.random().toFixed(10).toString())
 
   const {
-    theme: { stroke, scatter },
-    tooltipComponent,
+    theme: { stroke, gradient },
     data = contextData,
     tension,
     smoothing,
-    onTooltipSelect,
-    hideTooltipOnDragEnd,
-    hideTooltipAfter,
-    onTooltipSelectEnd = () => {},
+    tooltipComponent,
   } = deepmerge(defaultProps, props)
 
   if (!dimensions) {
@@ -61,66 +60,23 @@ const Line = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
   }
 
   React.useImperativeHandle(ref, () => ({
-    setTooltipIndex: (index: number | undefined) => {
-      if (typeof index === 'number' && (index < 0 || index >= data.length)) {
-        throw new Error(`Range out of bounds. Tried to set tooltip index to ${index} but there are only ${data.length} data points.`)
-      }
-      setTooltipIndex(index)
-    },
+    setTooltipIndex: (index: number | undefined) => {},
   }))
-
-  React.useEffect(() => {
-    if (props.initialTooltipIndex !== undefined && !lastTouch) {
-      setTooltipIndex(props.initialTooltipIndex)
-    }
-  }, [props.initialTooltipIndex])
-
-  React.useEffect(() => {
-    const scaledPoints = scalePointsToDimensions(data, viewportDomain, dimensions)
-    const newIndex = calculateTooltipIndex(scaledPoints, lastTouch?.position)
-
-    let tooltipTimer: number
-
-    if (lastTouch?.type === 'panEnd') {
-      if (hideTooltipOnDragEnd && Math.abs(lastTouch?.translation?.x) > 5) {
-        setTooltipIndex(undefined)
-      }
-      // Hide tooltip after specified time
-      else if (typeof hideTooltipAfter === 'number') {
-        tooltipTimer = setTimeout(() => setTooltipIndex(undefined), hideTooltipAfter)
-      }
-      onTooltipSelectEnd()
-    } else if (newIndex !== tooltipIndex && lastTouch) {
-      // Hide tooltip after specified time
-      if (typeof hideTooltipAfter === 'number') {
-        tooltipTimer = setTimeout(() => setTooltipIndex(undefined), hideTooltipAfter)
-      }
-      // Necessary for Android because pan is called even when finger is not actually panning.
-      // If we don't check for this, we have interference with the tap handler
-      if (lastTouch?.type !== 'pan' || Math.abs(lastTouch?.translation?.x) > 5) {
-        setTooltipIndex(newIndex)
-      }
-      if (typeof onTooltipSelect === 'function' && typeof newIndex === 'number' && data.length > newIndex) {
-        onTooltipSelect(data[newIndex], newIndex)
-      }
-    } else if (newIndex === tooltipIndex && lastTouch?.type === 'tap') {
-      setTooltipIndex(undefined)
-    }
-
-    return () => {
-      clearTimeout(tooltipTimer)
-    }
-  }, [lastTouch, hideTooltipAfter])
 
   const scaledPoints = scalePointsToDimensions(data, viewportDomain, dimensions)
   const points = adjustPointsForThickStroke(scaledPoints, stroke)
-  const path = svgPath(points, smoothing, tension)
+  const linePath = svgPath(points, smoothing, tension)
+  const areaPath = svgPath(scaledPoints, smoothing, tension)
+  const closedPath = appendPointsToPath(areaPath, [
+    { x: scaledPoints[scaledPoints.length - 1].x, y: dimensions.height },
+    { x: scaledPoints[0].x, y: dimensions.height },
+  ])
 
   return (
     <React.Fragment>
       <G translateX={viewportOrigin.x} translateY={viewportOrigin.y}>
         <Path
-          d={path}
+          d={linePath}
           fill="none"
           strokeLinecap="round"
           strokeDasharray={stroke.dashArray.length > 0 ? stroke.dashArray.join(',') : undefined}
@@ -129,7 +85,7 @@ const Line = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
           strokeOpacity={stroke.opacity}
           mask="url(#Mask)"
         />
-        {points.map((p, i) => {
+        {/* {points.map((p, i) => {
           const shape = i === tooltipIndex ? deepmerge(scatter.default, scatter.selected) : scatter.default
           // Don't render if point falls out of viewport
           if (data[i].x < viewportDomain.x.min || data[i].x > viewportDomain.x.max || data[i].y < viewportDomain.y.min || data[i].y > viewportDomain.y.max) {
@@ -152,16 +108,52 @@ const Line = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
               width={shape.width}
             />
           )
-        })}
+        })} */}
       </G>
-      {tooltipIndex !== undefined &&
-        tooltipComponent &&
-        React.cloneElement(tooltipComponent, { value: data[tooltipIndex], position: scaledPoints[tooltipIndex] })}
+      <LineTooltip data={data} dimensions={dimensions} viewportDomain={viewportDomain} tooltipComponent={tooltipComponent} scaledPoints={scaledPoints} />
+      <G translateX={viewportOrigin.x} translateY={viewportOrigin.y} mask="url(#Mask)">
+        <Defs>
+          <LinearGradient id={`grad${randomGradientRef}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor={gradient.from.color} stopOpacity={gradient.from.opacity} />
+            <Stop offset="100%" stopColor={gradient.to.color} stopOpacity={gradient.to.opacity} />
+          </LinearGradient>
+        </Defs>
+        <Path d={closedPath} fill={`url(#grad${randomGradientRef})`} strokeWidth="0"></Path>
+      </G>
     </React.Fragment>
   )
 })
 
-export { Line }
+const LineTooltip: React.FC<Props> = (props) => {
+  const lastTouch = useChartContextLastTouch()
+  const { tooltipComponent, data, dimensions, scaledPoints } = deepmerge(defaultProps, props)
+
+  if (!dimensions) {
+    return null
+  }
+
+  let tooltipIndex: number | undefined = props.initialTooltipIndex !== undefined && !lastTouch ? props.initialTooltipIndex : undefined
+  const newIndex = calculateTooltipIndex(scaledPoints, lastTouch?.position)
+  if (lastTouch?.type === 'panEnd') {
+    // do nothing
+  } else if (newIndex !== tooltipIndex && lastTouch) {
+    // Necessary for Android because pan is called even when finger is not actually panning.
+    // If we don't check for this, we have interference with the tap handler
+    if (lastTouch?.type !== 'pan' || Math.abs(lastTouch?.translation?.x) > 5) {
+      tooltipIndex = newIndex
+    }
+  } else if (newIndex === tooltipIndex && lastTouch?.type === 'tap') {
+    tooltipIndex = undefined
+  }
+
+  if (tooltipIndex === undefined || tooltipComponent === undefined || tooltipComponent === null) {
+    return null
+  }
+
+  return <>{React.cloneElement(tooltipComponent, { value: data[tooltipIndex], position: scaledPoints[tooltipIndex] })}</>
+}
+
+export { LineArea }
 
 const defaultProps = {
   theme: {
@@ -182,7 +174,18 @@ const defaultProps = {
       },
       selected: {},
     },
+    gradient: {
+      from: {
+        color: 'red',
+        opacity: 1,
+      },
+      to: {
+        color: 'red',
+        opacity: 0.2,
+      },
+    },
   },
   tension: 0.3,
   smoothing: 'none',
+  scaledPoints: [],
 }
