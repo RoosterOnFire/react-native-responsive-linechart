@@ -34,9 +34,11 @@ type Props = {
   initialTooltipIndex?: number
   /** Data for the chart. Overrides optional data provided in `<Chart />`. */
   data?: ChartDataPoint[]
+  /** extra */
   dimensions?: Dimensions
   viewportDomain?: ChartDomain
   scaledPoints?: { x: number; y: number }[]
+  tooltipVisible?: boolean
 }
 
 export type LineHandle = {
@@ -44,7 +46,7 @@ export type LineHandle = {
 }
 
 const LineArea = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
-  const { data: contextData, dimensions, viewportDomain, viewportOrigin } = React.useContext(ChartContext)
+  const { data: contextData, dimensions, viewportDomain, viewportOrigin, isLineAreaTooltipEnabled } = React.useContext(ChartContext)
   const [randomGradientRef] = React.useState(Math.random().toFixed(10).toString())
 
   const {
@@ -53,6 +55,7 @@ const LineArea = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
     tension,
     smoothing,
     tooltipComponent,
+    tooltipVisible,
   } = deepmerge(defaultProps, props)
 
   if (!dimensions) {
@@ -110,7 +113,9 @@ const LineArea = React.forwardRef<LineHandle, Props>(function Line(props, ref) {
           )
         })} */}
       </G>
-      <LineTooltip data={data} dimensions={dimensions} viewportDomain={viewportDomain} tooltipComponent={tooltipComponent} scaledPoints={scaledPoints} />
+      {isLineAreaTooltipEnabled && tooltipVisible && (
+        <LineTooltip data={data} dimensions={dimensions} viewportDomain={viewportDomain} tooltipComponent={tooltipComponent} scaledPoints={scaledPoints} />
+      )}
       <G translateX={viewportOrigin.x} translateY={viewportOrigin.y} mask="url(#Mask)">
         <Defs>
           <LinearGradient id={`grad${randomGradientRef}`} x1="0%" y1="0%" x2="0%" y2="100%">

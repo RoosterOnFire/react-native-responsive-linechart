@@ -8,6 +8,7 @@ const ChartContext = React.createContext<TChartContext>({
   viewportDomain: { x: { min: 0, max: 0 }, y: { min: 0, max: 0 } },
   viewportOrigin: { x: 0, y: 0 },
   viewport: { size: { width: 0, height: 0 }, initialOrigin: { x: 0, y: 0 } },
+  isLineAreaTooltipEnabled: true,
 })
 
 export const ChartContextProvider = ChartContext.Provider
@@ -65,8 +66,7 @@ const ChartContextLastTouch = React.createContext<TouchEvent | undefined>(undefi
 export const ChartContextLastTouchProvider = ChartContextLastTouch.Provider
 
 export const useChartContextLastTouch = () => {
-  const context = React.useContext(ChartContextLastTouch)
-  return context
+  return React.useContext(ChartContextLastTouch)
 }
 
 export default ChartContext

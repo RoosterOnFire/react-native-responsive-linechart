@@ -33,6 +33,8 @@ type Props = {
   padding?: Padding
   dimensions?: { width: number; height: number } | undefined
   dataDimensions?: { top: number; left: number; width: number; height: number }
+  /** extra */
+  isLineAreaTooltipEnabled?: boolean
 }
 
 const Chart: React.FC<Props> = React.memo((props) => {
@@ -70,7 +72,7 @@ const Chart: React.FC<Props> = React.memo((props) => {
 }, fastEqual)
 
 const ChartInnerContainer: React.FC<Props> = (props) => {
-  const { children, padding, xDomain, yDomain, viewport, disableGestures, disableTouch, dimensions, dataDimensions } = deepmerge(
+  const { children, padding, xDomain, yDomain, viewport, disableGestures, disableTouch, dimensions, dataDimensions, isLineAreaTooltipEnabled } = deepmerge(
     computeDefaultProps(props),
     props
   )
@@ -79,11 +81,13 @@ const ChartInnerContainer: React.FC<Props> = (props) => {
   const panGesture = React.createRef()
 
   const [lastTouch, setLastTouch] = React.useState<TouchEvent | undefined>(undefined)
-  const [panX, setPanX] = React.useState<number>(viewport.initialOrigin.x)
-  const [panY, setPanY] = React.useState<number>(viewport.initialOrigin.y)
+  const [pan, setPan] = React.useState<{ x: number; y: number }>({
+    x: viewport.initialOrigin.x,
+    y: viewport.initialOrigin.y,
+  })
   const [offset] = React.useState(new Animated.ValueXY({ x: viewport.initialOrigin.x, y: viewport.initialOrigin.y }))
 
-  const viewportDomain = calculateViewportDomain(viewport, { x: xDomain, y: yDomain }, panX, panY)
+  const viewportDomain = calculateViewportDomain(viewport, { x: xDomain, y: yDomain }, pan.x, pan.y)
 
   const handleTouchEvent = React.useCallback(
     debounce(
@@ -109,10 +113,8 @@ const ChartInnerContainer: React.FC<Props> = (props) => {
   const handlePanEvent = (evt: NativeSyntheticEvent<any>) => {
     if (dataDimensions) {
       const factorX = viewport.size.width / dataDimensions.width
-      setPanX((offset.x as any)._value - evt.nativeEvent.translationX * factorX)
-
       const factorY = viewport.size.height / dataDimensions.height
-      setPanY((offset.y as any)._value + evt.nativeEvent.translationY * factorY)
+      setPan({ x: factorX, y: factorY })
 
       if (evt.nativeEvent.state === State.END) {
         offset.x.setValue(clamp((offset.x as any)._value - evt.nativeEvent.translationX * factorX, xDomain.min, xDomain.max - viewport.size.width))
@@ -168,6 +170,7 @@ const ChartInnerContainer: React.FC<Props> = (props) => {
       viewportDomain: viewportDomain,
       viewportOrigin: scalePointToDimensions({ x: viewportDomain.x.min, y: viewportDomain.y.max }, viewportDomain, dataDimensions),
       viewport: viewport,
+      isLineAreaTooltipEnabled: isLineAreaTooltipEnabled,
     }
   }, [
     dataDimensions.top,
@@ -238,5 +241,6 @@ const computeDefaultProps = (props: Props) => {
       size: { width: Math.abs(xDomain.max - xDomain.min), height: Math.abs(yDomain.max - yDomain.min) },
       initialOrigin: { x: xDomain.min, y: yDomain.min },
     },
+    isLineAreaTooltipEnabled: true,
   }
 }

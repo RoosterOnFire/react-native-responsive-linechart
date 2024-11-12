@@ -53,6 +53,7 @@ export type ChartContext = {
   viewportDomain: ChartDomain
   viewportOrigin: XYValue
   viewport: ViewPort
+  isLineAreaTooltipEnabled: boolean
 }
 
 export type TouchEvent =
